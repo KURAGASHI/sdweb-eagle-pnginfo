@@ -10,7 +10,7 @@ from scripts.eagleapi import api_util
 from scripts.parser import Parser
 from scripts.tag_generator import TagGenerator
 
-DEBUG = True  # デバッグ出力を有効化
+DEBUG = True  # デバッグ出力を有効化.
 def dprint(str):
     if DEBUG:
         print(str)
