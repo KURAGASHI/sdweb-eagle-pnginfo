@@ -1,7 +1,7 @@
-# Eagle-pnginfo
+# Eagle Pnginfo (Eagle API Toke対応版)
 
-- eagle-pnginfoをEagle API Tokeに対応させたFork版です。
 - Stable Diffusion Web UIを動かしているマシンと、Eagleが別PCで動いているとき、設定は正しくされてるのに、localhost:41595 に送ろうとして失敗して画像が送れないことがあります。
+- eagle-pnginfoをEagle API Tokeに対応させたFork版です。
 - 設定画面にEagle API Tokenを入れて画像を送れるように改良してみました。
 
 ## Eagleの開発者タブ画面
