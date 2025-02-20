@@ -10,7 +10,7 @@ from scripts.eagleapi import api_util
 from scripts.parser import Parser
 from scripts.tag_generator import TagGenerator
 
-DEBUG = False
+DEBUG = True  # デバッグ出力を有効化
 def dprint(str):
     if DEBUG:
         print(str)
@@ -34,17 +34,23 @@ def on_ui_settings():
     shared.opts.add_option("save_to_eagle_folderid", shared.OptionInfo("", "(option) FolderID or FolderName on Eagle", component_args=shared.hide_dirs, section=("eagle_pnginfo", "Eagle Pnginfo")))
     # specify Eagle folderID
     shared.opts.add_option("allow_to_create_folder_on_eagle", shared.OptionInfo(False, "(option) Allow to create folder on Eagle, if specified foldername dont exists.", section=("eagle_pnginfo", "Eagle Pnginfo")))
+    # txt: API token
+    shared.opts.add_option("eagle_api_token", shared.OptionInfo("", "Eagle API Token", section=("eagle_pnginfo", "Eagle Pnginfo")))
 
 # image saved callback
 def on_image_saved(params:script_callbacks.ImageSaveParams):
     if not shared.opts.enable_eagle_integration:
-        dprint(f"DEBUG:on_image_saved:  DISABLED")
-    else:
-        dprint(f"DEBUG:on_image_saved:  ENABELD. enable_eagle_pnginfo is true.")
+        dprint(f"DEBUG: Eagle integration is DISABLED")
+        return
+
+    try:
+        dprint(f"DEBUG: Eagle integration is ENABLED")
         # collect info
         fullfn = os.path.join(path_root, params.filename)
+        dprint(f"DEBUG: Full file path: {fullfn}")
         info = params.pnginfo.get('parameters', None)
         filename = os.path.splitext(os.path.basename(fullfn))[0]
+        dprint(f"DEBUG: File name: {filename}")
         #
         pos_prompt = params.p.prompt
         neg_prompt = params.p.negative_prompt
@@ -67,46 +73,93 @@ def on_image_saved(params:script_callbacks.ImageSaveParams):
             _tags = gen.generate_from_p(shared.opts.additional_tags_to_eagle)
             if _tags and len(_tags) > 0:
                 tags += _tags
+        
+        dprint(f"DEBUG: Tags: {tags}")
+        dprint(f"DEBUG: Annotation available: {'Yes' if annotation else 'No'}")
 
-        def _get_folderId(folder_name_or_id, allow_create_new_folder, server_url="http://localhost", port=41595):
-            _ret = api_util.find_or_create_folder(folder_name_or_id, allow_create_new_folder, server_url, port)
-            return _ret
+        def _get_folderId(folder_name_or_id, allow_create_new_folder, server_url="http://localhost", port=41595, token=None):
+            try:
+                dprint(f"DEBUG: Getting folder ID")
+                dprint(f"DEBUG: Server URL: {server_url}, Port: {port}")
+                dprint(f"DEBUG: Folder name/ID: {folder_name_or_id}")
+                dprint(f"DEBUG: Token: {token[:8]}... (truncated)") if token else dprint("DEBUG: No token")
+                
+                _ret = api_util.find_or_create_folder(folder_name_or_id, allow_create_new_folder, server_url, port, token=token)
+                dprint(f"DEBUG: Folder ID result: {_ret}")
+                return _ret
+            except Exception as e:
+                print(f"Error getting folder ID: {e}")
+                return ""
 
         # send to Eagle
-        if shared.opts.outside_server_url_port != "" and api_application.is_valid_url_port(shared.opts.outside_server_url_port):
+        token = shared.opts.eagle_api_token
+        dprint(f"DEBUG: Token configured: {'Yes' if token else 'No'}")
+
+        if shared.opts.outside_server_url_port != "" and api_application.is_valid_url_port(shared.opts.outside_server_url_port, token=token):
             # send by URL
-            dprint("DEBUG: try to send URL")
-            item = api_item.EAGLE_ITEM_URL(
-                    url=fullfn,
-                    name=filename,
-                    tags=tags,
-                    annotation=annotation
+            try:
+                dprint(f"DEBUG: Using remote server: {shared.opts.outside_server_url_port}")
+                item = api_item.EAGLE_ITEM_URL(
+                        url=fullfn,
+                        name=filename,
+                        tags=tags,
+                        annotation=annotation
+                    )
+                server_url, port = api_util.get_url_port(shared.opts.outside_server_url_port)
+                dprint(f"DEBUG: Parsed server URL: {server_url}, port: {port}")
+
+                if not server_url or not port:
+                    print("Error: Invalid server URL or port")
+                    return
+
+                folderId = _get_folderId(
+                    shared.opts.save_to_eagle_folderid, 
+                    shared.opts.allow_to_create_folder_on_eagle, 
+                    server_url=server_url, 
+                    port=port,
+                    token=token
                 )
-            server_url, port = api_util.get_url_port(shared.opts.outside_server_url_port)
-            folderId = _get_folderId(shared.opts.save_to_eagle_folderid, shared.opts.allow_to_create_folder_on_eagle, server_url=server_url, port=port)
-            _ret = api_item.add_from_URL_base64(
-                item,
-                folderId=folderId,
-                server_url=server_url,
-                port=port
-            )
+                dprint(f"DEBUG: Using folder ID: {folderId}")
+
+                _ret = api_item.add_from_URL_base64(
+                    item,
+                    folderId=folderId,
+                    server_url=server_url,
+                    port=port,
+                    token=token
+                )
+                dprint(f"DEBUG: API Response status: {_ret.status_code}")
+                dprint(f"DEBUG: API Response content: {_ret.content.decode('utf-8') if _ret.content else 'No content'}")
+            except Exception as e:
+                print(f"Error sending to remote Eagle server: {e}")
         else:
             # send to local
-            dprint("DEBUG: try to send local")
-            item = api_item.EAGLE_ITEM_PATH(
-                filefullpath=fullfn,
-                filename=filename,
-                annotation=annotation,
-                tags=tags
-            )
-            folderId = _get_folderId(shared.opts.save_to_eagle_folderid, shared.opts.allow_to_create_folder_on_eagle)
-            _ret = api_item.add_from_path(
-                item=item,
-                folderId=folderId
-            )
-        dprint(f"DEBUG: {_ret}")
-        dprint(f"  content    :{_ret.content}")
-        dprint(f"  status_code:{_ret.status_code}")
+            try:
+                dprint("DEBUG: Using local server")
+                item = api_item.EAGLE_ITEM_PATH(
+                    filefullpath=fullfn,
+                    filename=filename,
+                    annotation=annotation,
+                    tags=tags
+                )
+                folderId = _get_folderId(
+                    shared.opts.save_to_eagle_folderid, 
+                    shared.opts.allow_to_create_folder_on_eagle,
+                    token=token
+                )
+                dprint(f"DEBUG: Using local folder ID: {folderId}")
+
+                _ret = api_item.add_from_path(
+                    item=item,
+                    folderId=folderId,
+                    token=token
+                )
+                dprint(f"DEBUG: Local API Response status: {_ret.status_code}")
+                dprint(f"DEBUG: Local API Response content: {_ret.content.decode('utf-8') if _ret.content else 'No content'}")
+            except Exception as e:
+                print(f"Error sending to local Eagle server: {e}")
+    except Exception as e:
+        print(f"Error in on_image_saved: {e}")
 
 # on_image_saved
 script_callbacks.on_image_saved(on_image_saved)

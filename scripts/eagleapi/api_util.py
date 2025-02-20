@@ -16,6 +16,21 @@ def get_url_port(server_url_port=""):
     port = o.port
     return _url, port
 
+def append_token_to_url(api_url, token=None):
+    """APIエンドポイントにトークンを付加する
+
+    Args:
+        api_url (str): 基本となるAPI URL
+        token (str, optional): 追加するトークン. Defaults to None.
+
+    Returns:
+        str: トークンが付加されたURL（トークンがNoneの場合は元のURL）
+    """
+    if token and token.strip():
+        separator = '&' if '?' in api_url else '?'
+        return f"{api_url}{separator}token={token.strip()}"
+    return api_url
+
 # util for /api/folder/list
 def findFolderByID(r_posts, target_id):
     return findFolderByName(r_posts, target_id, findByID=True)
@@ -74,37 +89,42 @@ def get_json_from_response(_res:requests.Response):
     except:
         return _res
 
-def find_or_create_folder(folder_name_or_id, allow_create_new_folder=False, server_url="http://localhost", port=41595, timeout_connect=3, timeout_read=10):
-    """
-    Find or Create folder on Eagle, by folderId or FolderName
+# api_util.py
+
+def find_or_create_folder(folder_name_or_id, allow_create_new_folder=False, server_url="http://localhost", port=41595, token=None):
+    """Find or Create folder on Eagle, by folderId or FolderName
 
     Args:
-        folder_name_or_id (str):
-        allow_create_new_folder (bool, optional): if True, create new folder on Eagle. Defaults to False.
-        server_url (str, optional): Defaults to "http://localhost".
-        port (int, optional): Defaults to 41595.
-        timeout_connect (int, optional): Defaults to 3.
-        timeout_read (int, optional): Defaults to 10.
-    Return:
-        folderId or ""
+        folder_name_or_id (str): フォルダ名またはID
+        allow_create_new_folder (bool, optional): フォルダが存在しない場合に作成を許可. Defaults to False.
+        server_url (str, optional): サーバーURL. Defaults to "http://localhost".
+        port (int, optional): ポート番号. Defaults to 41595.
+        token (str, optional): APIトークン. Defaults to None.
 
+    Returns:
+        str: folderId or empty string
     """
     _eagle_folderid = ""
     if folder_name_or_id and folder_name_or_id !="":
-        _ret_folder_list = api_folder.list(server_url=server_url, port=port, timeout_connect=timeout_connect, timeout_read=timeout_read)
+        _ret_folder_list = api_folder.list(server_url=server_url, port=port, token=token)
 
-        # serach by name
+        # search by name
         _ret = findFolderByName(_ret_folder_list, folder_name_or_id)
         if _ret and len(_ret) > 0:
             _eagle_folderid = _ret.get("id", "")
-        # serach by ID
+        # search by ID
         if _eagle_folderid == "":
             _ret = findFolderByID(_ret_folder_list, folder_name_or_id)
             if _ret and len(_ret) > 0:
                 _eagle_folderid = _ret.get("id", "")
         if _eagle_folderid == "":
             if allow_create_new_folder: # allow new
-                _r_get = api_folder.create(folder_name_or_id, server_url=server_url, port=port, timeout_connect=timeout_connect, timeout_read=timeout_read)
+                _r_get = api_folder.create(
+                    folder_name_or_id, 
+                    server_url=server_url, 
+                    port=port,
+                    token=token
+                )
                 try:
                     _eagle_folderid = _r_get.json().get("data").get("id")
                 except:
