@@ -3,10 +3,11 @@
 #
 import requests
 import os
-
 import base64
 
-DEBUG = False
+from . import api_util
+
+DEBUG = True
 def dprint(str):
     if DEBUG:
         print(str)
@@ -76,19 +77,24 @@ class EAGLE_ITEM_URL:
                 return filepath
         else:
             self.url = filepath
+            
+        dprint(f"DEBUG [convert_file_to_base64url] File path: {filepath}")
+        
         if not os.path.exists(filepath):
             print("Error convert_file_to_base64url: file not found.")
             return filepath
+            
         try:
             with open(filepath, "rb") as file:
+                dprint("DEBUG [convert_file_to_base64url] Reading file content")
                 enc_file = base64.urlsafe_b64encode(file.read())
                 self.url = f"data:image/png;base64, {enc_file.decode('utf-8')}"
+                dprint("DEBUG [convert_file_to_base64url] Successfully converted to base64")
+                return self.url
         except Exception as e:
-            print("Error convert_file_to_base64url: eocode failed")
+            print("Error convert_file_to_base64url: encode failed")
             print(e)
             return filepath
-
-        return self.url
 
     def output_data(self):
         """
@@ -114,35 +120,71 @@ class EAGLE_ITEM_URL:
         return _data
 
 
-def add_from_URL(item:EAGLE_ITEM_URL, folderId=None, server_url="http://localhost", port=41595):
+def add_from_URL(item:EAGLE_ITEM_URL, folderId=None, server_url="http://localhost", port=41595, token=None):
     API_URL = f"{server_url}:{port}/api/item/addFromURL"
+    
+    dprint(f"DEBUG [add_from_URL] API URL: {API_URL}")
+    dprint(f"DEBUG [add_from_URL] FolderID: {folderId}")
+    
     _data = item.output_data()
     if folderId and folderId != "":
         _data.update({"folderId": folderId})
+    if token:
+        _data.update({"token": token})
+        
+    dprint(f"DEBUG [add_from_URL] Request data keys: {list(_data.keys())}")
     r_post = requests.post(API_URL, json=_data)
+    
+    dprint(f"DEBUG [add_from_URL] Response status: {r_post.status_code}")
+    dprint(f"DEBUG [add_from_URL] Response content: {r_post.content.decode('utf-8') if r_post.content else 'No content'}")
     return r_post
 
 
-def add_from_URL_base64(item:EAGLE_ITEM_URL, folderId=None, server_url="http://localhost", port=41595):
+def add_from_URL_base64(item:EAGLE_ITEM_URL, folderId=None, server_url="http://localhost", port=41595, token=None):
     API_URL = f"{server_url}:{port}/api/item/addFromURL"
+    
+    dprint(f"DEBUG [add_from_URL_base64] API URL: {API_URL}")
+    dprint(f"DEBUG [add_from_URL_base64] FolderID: {folderId}")
+    
+    dprint("DEBUG [add_from_URL_base64] Converting file to base64")
     item.url = item.convert_file_to_base64url()
     _data = item.output_data()
     if folderId and folderId != "":
         _data.update({"folderId": folderId})
+    if token:
+        _data.update({"token": token})
+        
+    dprint(f"DEBUG [add_from_URL_base64] Request data keys: {list(_data.keys())}")
+    dprint(f"DEBUG [add_from_URL_base64] Base64 URL length: {len(item.url) if item.url else 0}")
     r_post = requests.post(API_URL, json=_data)
+    
+    dprint(f"DEBUG [add_from_URL_base64] Response status: {r_post.status_code}")
+    dprint(f"DEBUG [add_from_URL_base64] Response content: {r_post.content.decode('utf-8') if r_post.content else 'No content'}")
     return r_post
 
 
-def add_from_path(item:EAGLE_ITEM_PATH, folderId=None, server_url="http://localhost", port=41595):
+def add_from_path(item:EAGLE_ITEM_PATH, folderId=None, server_url="http://localhost", port=41595, token=None):
     API_URL = f"{server_url}:{port}/api/item/addFromPath"
+    
+    dprint(f"DEBUG [add_from_path] API URL: {API_URL}")
+    dprint(f"DEBUG [add_from_path] FolderID: {folderId}")
+    dprint(f"DEBUG [add_from_path] File path: {item.filefullpath}")
+    
     _data = item.output_data()
     if folderId and folderId != "":
         _data.update({"folderId": folderId})
+    if token:
+        _data.update({"token": token})
+        
+    dprint(f"DEBUG [add_from_path] Request data keys: {list(_data.keys())}")
     r_post = requests.post(API_URL, json=_data)
+    
+    dprint(f"DEBUG [add_from_path] Response status: {r_post.status_code}")
+    dprint(f"DEBUG [add_from_path] Response content: {r_post.content.decode('utf-8') if r_post.content else 'No content'}")
     return r_post
 
 
-def add_from_paths(files, folderId=None, server_url="http://localhost", port=41595, step=None):
+def add_from_paths(files, folderId=None, server_url="http://localhost", port=41595, step=None, token=None):
     """EAGLE API:/api/item/addFromPaths
 
     Method: POST
@@ -155,19 +197,27 @@ def add_from_paths(files, folderId=None, server_url="http://localhost", port=415
         tags: Tags for the images.
         folderId: If this parameter is defined, the image will be added to the corresponding folder.
         step: interval image num of doing POST. Defaults is None (disabled)
+        token: API token for authentication. Defaults to None.
 
     Returns:
         Response: return of requests.posts
     """
     API_URL = f"{server_url}:{port}/api/item/addFromPaths"
+    
+    dprint(f"DEBUG [add_from_paths] API URL: {API_URL}")
+    dprint(f"DEBUG [add_from_paths] FolderID: {folderId}")
+    dprint(f"DEBUG [add_from_paths] Number of files: {len(files)}")
 
     if step:
         step = int(step)
+        dprint(f"DEBUG [add_from_paths] Using step: {step}")
 
     def _init_data():
         _data = {"items": []}
         if folderId and folderId != "":
             _data.update({"folderId": folderId})
+        if token:
+            _data.update({"token": token})
         return _data
 
     r_posts = []
@@ -179,17 +229,23 @@ def add_from_paths(files, folderId=None, server_url="http://localhost", port=415
             data["items"].append(_data)
         if step and step > 0:
             if ((_index + 1) - ((_index + 1) // step) * step) == 0:
+                dprint(f"DEBUG [add_from_paths] Sending batch {_index + 1}")
                 _ret = requests.post(API_URL, json=data)
                 try:
                     r_posts.append(_ret.json())
+                    dprint(f"DEBUG [add_from_paths] Batch response: {_ret.json()}")
                 except:
                     r_posts.append(_ret)
+                    dprint(f"DEBUG [add_from_paths] Raw batch response: {_ret}")
                 data = _init_data()
     if (len(data["items"]) > 0) or (not step or step <= 0):
+        dprint("DEBUG [add_from_paths] Sending final batch")
         _ret = requests.post(API_URL, json=data)
         try:
             r_posts.append(_ret.json())
+            dprint(f"DEBUG [add_from_paths] Final batch response: {_ret.json()}")
         except:
             r_posts.append(_ret)
+            dprint(f"DEBUG [add_from_paths] Raw final batch response: {_ret}")
 
     return [ x for x in r_posts if x != "" ]
